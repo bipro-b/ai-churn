@@ -10,7 +10,7 @@
 # source. "What's running in prod?" -> the SHA answers it.
 #
 # AUTH: GitHub OIDC assumes an AWS IAM role — no long-lived AWS keys stored in
-# GitHub. You only need to set the AWS_ROLE_ARN repository VARIABLE.
+# GitHub. You only need to set the AWS_ROLE_ARN repository SECRET.
 
 name: CI/CD
 
@@ -63,7 +63,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
