@@ -8,7 +8,6 @@ broken model or a broken contract never reaches AWS. We test three layers:
 3. The API serves correct predictions end-to-end (with a real loaded model).
 """
 
-import os
 import subprocess
 import sys
 from pathlib import Path

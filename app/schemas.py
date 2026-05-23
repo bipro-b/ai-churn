@@ -8,7 +8,6 @@ instead of 500s. This is the contract between your service and its callers.
 """
 
 from enum import Enum
-from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -64,7 +63,7 @@ class PredictionResponse(BaseModel):
 
 
 class BatchPredictionRequest(BaseModel):
-    customers: List[CustomerFeatures] = Field(..., min_length=1, max_length=1000)
+    customers: list[CustomerFeatures] = Field(..., min_length=1, max_length=1000)
 
 
 class HealthResponse(BaseModel):

@@ -20,9 +20,10 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, Response
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from fastapi import FastAPI, HTTPException, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
+from app.config import settings
 from app.ml.model import ChurnModel
 from app.schemas import (
     BatchPredictionRequest,
@@ -30,7 +31,6 @@ from app.schemas import (
     HealthResponse,
     PredictionResponse,
 )
-from app.config import settings
 
 # Structured JSON logging — parseable by CloudWatch, Loki, Datadog, etc.
 logging.basicConfig(level=logging.INFO, format="%(message)s")
