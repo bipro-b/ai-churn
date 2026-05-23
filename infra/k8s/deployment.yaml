@@ -1,0 +1,67 @@
+# Kubernetes Deployment.
+#
+# This is the EKS track you asked for. Honest senior take: for ONE model service,
+# Kubernetes is more machinery than you need — Fargate (the Terraform track) is
+# simpler and cheaper. K8s earns its complexity when you have MANY services, need
+# fine-grained control, multi-cloud portability, or a platform team. Learn it
+# here so you KNOW it; choose it in real life only when it's justified.
+#
+# Note the production-grade details: resource requests/limits (so one pod can't
+# starve the node), liveness AND readiness probes (mapped to our two health
+# endpoints), and a rolling update strategy for zero downtime.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: churn-api
+  labels:
+    app: churn-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: churn-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0 # never drop below desired during a deploy
+  template:
+    metadata:
+      labels:
+        app: churn-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: churn-api
+          # Replace <ACCOUNT_ID> and tag via the runbook / CI before applying.
+          image: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/churn-api:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MODEL_VERSION
+              value: "k8s-deploy"
+            - name: LOG_LEVEL
+              value: "INFO"
+          resources:
+            requests: # what the scheduler guarantees
+              cpu: "250m"
+              memory: "256Mi"
+            limits: # hard ceiling — pod is throttled/killed past this
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe: # "is the process wedged? -> restart it"
+            httpGet:
+              path: /health/live
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe: # "can it serve? -> include in Service endpoints"
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10

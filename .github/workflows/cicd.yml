@@ -1,0 +1,98 @@
+# CI/CD pipeline.
+#
+# The golden rule: nothing reaches production that didn't pass tests. This
+# pipeline enforces it. On every push to main:
+#   1. test  -> run the full pytest suite + lint. If this fails, STOP.
+#   2. build -> build the Docker image, tag it with the git SHA, push to ECR.
+#   3. deploy-> update the ECS service to the new image, wait for it to stabilize.
+#
+# Tagging images with the git SHA (not just "latest") means every deploy is
+# traceable to exact source. "What's running in prod?" -> the SHA tells you.
+#
+# AUTH: this uses GitHub OIDC to assume an AWS role — NO long-lived AWS keys in
+# GitHub secrets. That's the modern, secure pattern. The runbook shows the one-time
+# IAM setup. You only need to set the AWS_ROLE_ARN repo variable.
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: churn-api
+  ECS_CLUSTER: churn-api-cluster
+  ECS_SERVICE: churn-api-service
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Lint
+        run: ruff check app/ training/ monitoring/ tests/
+      - name: Run tests
+        run: pytest -v
+
+  build-and-deploy:
+    # Only build/deploy on a real push to main, never on PRs.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Train model artifact
+        # Bake a freshly trained model into the image. In a mature setup you'd
+        # instead pull a registered model from MLflow/S3 — see the runbook.
+        run: |
+          pip install -r requirements.txt
+          python training/train.py --n-samples 20000
+
+      - name: Build, tag, and push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --build-arg MODEL_VERSION=${IMAGE_TAG} \
+            -t $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Deploy to ECS
+        # Force a new deployment so the service pulls the new image.
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE \
+            --force-new-deployment
+          aws ecs wait services-stable \
+            --cluster $ECS_CLUSTER \
+            --services $ECS_SERVICE
+          echo "Deploy complete and service stable."

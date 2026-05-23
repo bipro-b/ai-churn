@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.git/
+.github/
+.pytest_cache/
+.ruff_cache/
+tests/
+notebooks/
+infra/
+monitoring/
+*.md
+.env
+.DS_Store
+mlruns/

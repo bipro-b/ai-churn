@@ -1,0 +1,43 @@
+# Local development stack. One command (`docker compose up`) gives you:
+# - the API
+# - Prometheus scraping its /metrics
+# - Grafana for dashboards
+#
+# This mirrors production observability on your laptop, so you debug monitoring
+# locally instead of discovering gaps in prod.
+
+services:
+  api:
+    build:
+      context: .
+      args:
+        MODEL_VERSION: local-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health/ready').status==200 else 1)"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    depends_on:
+      - prometheus

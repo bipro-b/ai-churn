@@ -1,0 +1,61 @@
+# Service + HorizontalPodAutoscaler + Ingress.
+#
+# - Service: stable internal address + load-balancing across pods.
+# - HPA: the K8s equivalent of the ECS autoscaling policy — scale pods on CPU.
+# - Ingress: exposes the service externally via an ALB (needs the AWS Load
+#   Balancer Controller installed on the cluster; the runbook covers this).
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-api
+  labels:
+    app: churn-api
+spec:
+  type: ClusterIP
+  selector:
+    app: churn-api
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: churn-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: churn-api
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: churn-api
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /health/ready
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: churn-api
+                port:
+                  number: 80
