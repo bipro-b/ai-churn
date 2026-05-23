@@ -12,7 +12,7 @@
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         },
         "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:bipro/ai-churn:*"
+          "token.actions.githubusercontent.com:sub": "repo:stacknerveio/aiops-churn:*"
         }
       }
     }
